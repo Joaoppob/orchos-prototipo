@@ -189,16 +189,24 @@ function getResponse(agent, mode, trigger = 'default') {
 const norm = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 const MODE_TRIGGERS = {
-  padrao:   ['modo padrao', 'voltar ao padrao', 'modo normal', 'tela inicial'],
-  escrita:  ['modo escrita', 'modo de escrita', 'entrar em escrita', 'quero escrever', 'vou escrever'],
-  jogo:     ['modo jogo', 'modo de jogo', 'entrar em jogo', 'iniciar jogo', 'quero jogar', 'vamos jogar'],
-  desenvolvimento: ['modo desenvolvimento', 'modo dev', 'abrir ide', 'abrir vscode', 'abrir vs code', 'quero codar', 'vamos codar', 'programar'],
-  conversa: ['modo conversa', 'modo de conversa', 'quero conversar', 'so conversar', 'minhas conversas'],
+  padrao:   ['padrao', 'modo padrao', 'voltar ao padrao', 'modo normal', 'tela inicial', 'inicio', 'home'],
+  escrita:  ['escrita', 'modo escrita', 'modo de escrita', 'entrar em escrita', 'quero escrever', 'vou escrever', 'editor'],
+  jogo:     ['jogo', 'modo jogo', 'modo de jogo', 'entrar em jogo', 'iniciar jogo', 'quero jogar', 'vamos jogar', 'jogar'],
+  desenvolvimento: ['desenvolvimento', 'desevolvimento', 'modo desenvolvimento', 'modo desevolvimento', 'modo dev', 'dev', 'abrir ide', 'ide', 'abrir vscode', 'abrir vs code', 'quero codar', 'vamos codar', 'programar', 'codar'],
+  conversa: ['conversa', 'conversar', 'modo conversa', 'modo de conversa', 'quero conversar', 'so conversar', 'minhas conversas'],
 };
 const AGENT_TRIGGERS = {
   durin:         ['chamar durin', 'falar com durin', 'durin'],
   desenvolvedor: ['chamar desenvolvedor', 'falar com desenvolvedor', 'desenvolvedor'],
   orientador:    ['chamar orientador', 'falar com orientador', 'orientador'],
+};
+const APP_TRIGGERS = {
+  documentos: ['documentos', 'documento', 'docs', 'arquivos', 'arquivo', 'abrir documentos', 'abrir documento', 'quero ver documento', 'quero ver documentos', 'meus documentos'],
+  navegador: ['navegador', 'browser', 'internet', 'web', 'site', 'sites', 'pagina', 'paginas'],
+  midia: ['midia', 'mídia', 'media', 'musica', 'música', 'player', 'radio', 'rádio', 'playlist', 'som'],
+  mensagens: ['mensagens', 'mensagem', 'inbox', 'caixa de entrada', 'abrir mensagens', 'ver mensagens'],
+  galeria: ['galeria', 'fotos', 'foto', 'imagens', 'imagem', 'album', 'álbum'],
+  ajustes: ['ajustes', 'configuracoes', 'configurações', 'configuracao', 'configuração', 'settings', 'preferencias', 'preferências'],
 };
 
 function parseIntent(text) {
@@ -208,6 +216,9 @@ function parseIntent(text) {
   }
   for (const [agent, kws] of Object.entries(AGENT_TRIGGERS)) {
     if (kws.some((k) => n.includes(norm(k)))) return { type: 'agent', value: agent };
+  }
+  for (const [app, kws] of Object.entries(APP_TRIGGERS)) {
+    if (kws.some((k) => n.includes(norm(k)))) return { type: 'app', value: app };
   }
   return { type: 'message' };
 }
@@ -375,15 +386,16 @@ function handleChat(text) {
 
   const intent = parseIntent(t);
   if (intent.type === 'mode') {
-    if (intent.value !== 'jogo') {
-      addBubble('agent', getResponse(state.agent, 'padrao', `confirma-${intent.value}`));
-    }
-    switchMode(intent.value, { announce: false });
+    switchMode(intent.value);
     return;
   }
   if (intent.type === 'agent') {
     switchAgent(intent.value);
     addBubble('agent', getResponse(intent.value, state.mode));
+    return;
+  }
+  if (intent.type === 'app') {
+    openApp(intent.value);
     return;
   }
   // mensagem comum → o agente "pensa" e responde (roteirizado por agente/modo)
@@ -1010,7 +1022,7 @@ const WM = {
     this.focus(id);
     this.renderContent(id);
     renderRailActive();
-    if (!opts.silent && state.mode !== 'jogo' && !state.agentOffline) addBubble('agent', `Abrindo ${opts.title || WIN[id].title}.`);
+    if (!opts.silent && !state.agentOffline) addBubble('agent', `Abrindo ${opts.title || WIN[id].title}.`);
   },
   focus(id) {
     const w = this.wins[id]; if (!w) return;
