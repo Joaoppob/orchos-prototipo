@@ -11,6 +11,8 @@ const state = {
   mode:  'padrao',       // 'padrao' | 'escrita' | 'jogo' | 'desenvolvimento' | 'conversa'
   agent: 'durin',        // 'durin' | 'desenvolvedor' | 'orientador'
   wallpaper: 'bisao',    // 'bisao' | 'slit' | 'dots' | 'solido'
+  gameActive: false,     // Modo Jogo: false = biblioteca em janela; true = jogo expandido no campo
+  activeGame: null,
   // janelas flutuantes são geridas pelo WM (gerenciador de janelas), fora do state
   agentOffline: false,   // modo degradado: o agente perdeu conexão
   pendingConfirm: null,  // ação irreversível aguardando permissão do usuário
@@ -49,6 +51,7 @@ const MODE_AGENT = {
   conversa: 'durin',
 };
 const MODE_WINDOW = {
+  jogo: { id: 'jogos', opts: { silent: true, center: true, w: 760, h: 520 } },
   escrita: { id: 'editor', opts: { silent: true, center: true, w: 780, h: 560 } },
   desenvolvimento: { id: 'ide', opts: { silent: true, center: true, w: 980, h: 640 } },
   conversa: { id: 'conversa', opts: { silent: true, center: true, w: 680, h: 560 } },
@@ -306,12 +309,13 @@ function switchMode(mode, { announce = true } = {}) {
   const changed = mode !== state.mode;
   const nextAgent = MODE_AGENT[mode] || state.agent;
   const agentChanged = nextAgent !== state.agent;
+  const resetGame = state.gameActive || state.activeGame;
 
   WM.closeAll();
 
-  if (changed || agentChanged) {
+  if (changed || agentChanged || resetGame) {
     document.body.classList.add('mode-transitioning');
-    setState({ mode, agent: nextAgent });
+    setState({ mode, agent: nextAgent, gameActive: false, activeGame: null });
     setTimeout(() => document.body.classList.remove('mode-transitioning'), 160);
     if (announce) addBubble('agent', getResponse(state.agent, 'padrao', `confirma-${mode}`));
   }
@@ -746,7 +750,46 @@ function escritaBody() {
 }
 function jogoBody() {
   // gameplay real preenchendo a janela (fiel ao Penpot) — sem texto sobreposto
-  return `<div class="game"><div class="game__viewport"><span class="game__live mono"><span class="game__dot"></span>AO VIVO</span></div></div>`;
+  const game = GAMES.find((item) => item.id === state.activeGame) || GAMES[0];
+  return `<div class="game"><div class="game__viewport" style="--game-cover:url('${game.cover}')"><span class="game__live mono"><span class="game__dot"></span>${game.title} · AO VIVO</span></div></div>`;
+}
+const GAMES = [
+  { id: 'sekiro', title: 'Sekiro', meta: 'AÇÃO · 60 FPS · CONTROLE', cover: 'assets/sekiro.png', state: 'Pronto para jogar' },
+  { id: 'hollow', title: 'Hollow Knight', meta: 'METROIDVANIA · CLOUD SAVE', cover: 'assets/background.jpg', state: 'Instalado' },
+  { id: 'celeste', title: 'Celeste', meta: 'PLATAFORMA · FOCO', cover: 'assets/bg.jpg', state: 'Pausado' },
+  { id: 'disco', title: 'Disco Elysium', meta: 'RPG · TEXTO', cover: 'assets/background1.jpg', state: 'Biblioteca' },
+];
+
+function jogosBody() {
+  const cards = GAMES.map((game, index) =>
+    `<button class="gamecard${index === 0 ? ' is-primary' : ''}" data-game="${escAttr(game.id)}">
+      <span class="gamecard__cover" style="background-image:url('${game.cover}')"></span>
+      <span class="gamecard__body">
+        <span class="gamecard__title">${game.title}</span>
+        <span class="gamecard__meta mono">${game.meta}</span>
+        <span class="gamecard__state">${game.state}</span>
+      </span>
+      <span class="gamecard__play mono">Jogar</span>
+    </button>`).join('');
+  return `<div class="gamelib">
+    <div class="gamelib__head">
+      <div><h2>Jogos</h2><p>Escolha um jogo para expandir no campo central.</p></div>
+      <span class="gamelib__count mono">${GAMES.length} disponíveis</span>
+    </div>
+    <div class="gamelib__grid">${cards}</div>
+  </div>`;
+}
+
+function wireJogos(root) {
+  root.querySelectorAll('.gamecard').forEach((card) =>
+    card.addEventListener('click', () => launchGame(card.dataset.game)));
+}
+
+function launchGame(id) {
+  const game = GAMES.find((item) => item.id === id) || GAMES[0];
+  WM.closeAll();
+  setState({ mode: 'jogo', agent: 'durin', gameActive: true, activeGame: game.id });
+  addBubble('agent', `${game.title} expandido no campo central.`);
 }
 function conversaBody() {
   const items = CONVOS.map((c, i) => `<li class="convo__item${i === 0 ? ' is-active' : ''}" data-title="${escAttr(c.title)}"><span class="convo__title">${c.title}</span><span class="convo__snippet mono">${c.snip}</span></li>`).join('');
@@ -976,6 +1019,7 @@ function editorBody(docName) {
 /* registro de janelas: apps + janelas de sistema (editor por doc, conversas) — tudo flutua */
 const WIN = Object.assign({}, APPS, {
   editor:   { title: 'Documento', body: (view, w) => editorBody(w && w.doc), wire: null },
+  jogos:    { title: 'Jogos', body: () => jogosBody(), wire: (root) => wireJogos(root) },
   ide:      { title: 'OrchOS Studio', body: () => desenvolvimentoBody(), wire: (root) => wireIde(root) },
   conversa: { title: 'Conversas', body: () => conversaBody(), wire: (root) => wireConvo(root) },
 });
@@ -1110,7 +1154,7 @@ function wireSuggest(root) {
 function renderDesktop() {
   const d = document.getElementById('desktop');
   if (!d) return;
-  if (state.mode === 'jogo') {
+  if (state.mode === 'jogo' && state.gameActive) {
     d.className = 'desktop desktop--game'; d.innerHTML = jogoBody(); return;
   }
   // Padrão/Escrita/Conversa: o campo mostra a área de trabalho; editor e conversas são janelas

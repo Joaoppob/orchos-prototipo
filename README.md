@@ -10,7 +10,7 @@ O projeto é estático, sem build e sem dependências. Pode ser aberto direto pe
 - Escrita: abre o editor e puxa o Orientador para o chat.
 - Desenvolvimento: abre uma IDE simulada inspirada no VS Code e puxa o Desenvolvedor.
 - Conversa: abre a janela de conversas.
-- Jogo: limpa janelas abertas, usa a imagem do jogo como fundo do campo central e mantém o chat à direita.
+- Jogo: limpa janelas abertas, abre a biblioteca de jogos em janela e, ao escolher um jogo, expande a imagem no campo central mantendo o chat à direita.
 
 ## Rodar localmente
 
